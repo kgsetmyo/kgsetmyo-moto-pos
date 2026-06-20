@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
 import { combineChunks, stringFromBase64URL } from "@supabase/ssr";
+import { validateAccessToken } from "@/lib/supabase/jwt";
+import { NextResponse, type NextRequest } from "next/server";
 
 const BASE64_PREFIX = "base64-";
 
@@ -9,7 +11,7 @@ export type AuthFromCookies = {
   accessToken?: string;
 };
 
-function storageKey() {
+export function authStorageKey() {
   const ref = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname.split(".")[0];
   return `sb-${ref}-auth-token`;
 }
@@ -40,57 +42,32 @@ async function readCookieJson(
   return decodeChunkedCookieValue(chunked);
 }
 
-function decodeJwtPayload(token: string): { sub?: string; email?: string } | null {
-  const parts = token.split(".");
-  if (parts.length < 2) return null;
+async function parseAuth(sessionJson: string | null): Promise<AuthFromCookies | null> {
+  if (!sessionJson) return null;
+
+  let accessToken: string | undefined;
+  let userId: string | undefined;
+  let email: string | undefined;
 
   try {
-    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const pad = base64.length % 4;
-    const padded = pad ? base64 + "=".repeat(4 - pad) : base64;
-    return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as {
-      sub?: string;
-      email?: string;
+    const session = JSON.parse(sessionJson) as {
+      access_token?: string;
+      user?: { id?: string; email?: string };
     };
+    accessToken = session.access_token;
+    userId = session.user?.id;
+    email = session.user?.email;
   } catch {
     return null;
   }
-}
 
-function parseAuth(sessionJson: string | null, userJson: string | null): AuthFromCookies | null {
-  let userId: string | undefined;
-  let email: string | undefined;
-  let accessToken: string | undefined;
+  if (!accessToken) return null;
 
-  if (sessionJson) {
-    try {
-      const session = JSON.parse(sessionJson) as {
-        access_token?: string;
-        user?: { id?: string; email?: string };
-      };
-      accessToken = session.access_token;
-      userId = session.user?.id;
-      email = session.user?.email;
+  const payload = await validateAccessToken(accessToken);
+  if (!payload) return null;
 
-      if (!userId && accessToken) {
-        const payload = decodeJwtPayload(accessToken);
-        userId = payload?.sub;
-        email = email ?? payload?.email;
-      }
-    } catch {
-      // try user cookie below
-    }
-  }
-
-  if (!userId && userJson) {
-    try {
-      const userData = JSON.parse(userJson) as { user?: { id?: string; email?: string } };
-      userId = userData.user?.id;
-      email = email ?? userData.user?.email;
-    } catch {
-      return null;
-    }
-  }
+  userId = payload.sub ?? userId;
+  email = email ?? payload.email;
 
   if (!userId) return null;
   return { userId, email, accessToken };
@@ -99,12 +76,9 @@ function parseAuth(sessionJson: string | null, userJson: string | null): AuthFro
 async function readAuth(
   getAll: () => Array<{ name: string; value: string }>
 ): Promise<AuthFromCookies | null> {
-  const key = storageKey();
-  const [sessionJson, userJson] = await Promise.all([
-    readCookieJson(key, getAll),
-    readCookieJson(`${key}-user`, getAll),
-  ]);
-  return parseAuth(sessionJson, userJson);
+  const key = authStorageKey();
+  const sessionJson = await readCookieJson(key, getAll);
+  return parseAuth(sessionJson);
 }
 
 /** Fast session read from Supabase auth cookies (no network). */
@@ -117,4 +91,26 @@ export async function getAuthFromRequestCookies(
   getAll: () => Array<{ name: string; value: string }>
 ) {
   return readAuth(getAll);
+}
+
+/** Clear Supabase auth cookies from a proxy response (invalid/expired session). */
+export function clearAuthCookies(request: NextRequest, response: NextResponse) {
+  const key = authStorageKey();
+  const names = new Set<string>();
+
+  for (const cookie of request.cookies.getAll()) {
+    const name = cookie.name;
+    if (
+      name === key ||
+      name.startsWith(`${key}.`) ||
+      name === `${key}-user` ||
+      name.startsWith(`${key}-user.`)
+    ) {
+      names.add(name);
+    }
+  }
+
+  for (const name of names) {
+    response.cookies.delete(name);
+  }
 }

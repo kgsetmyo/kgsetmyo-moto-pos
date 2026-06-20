@@ -93,6 +93,66 @@ async function securityChecks(adminCookie, cashierCookie) {
   return findings;
 }
 
+function userOnlyForgedCookie() {
+  const ref = new URL(url).hostname.split(".")[0];
+  const userData = {
+    user: { id: "00000000-0000-0000-0000-000000000001", email: "attacker@evil.com" },
+  };
+  return `sb-${ref}-auth-token-user=${encodeURIComponent(`base64-${stringToBase64URL(JSON.stringify(userData))}`)}`;
+}
+
+function invalidAccessTokenCookie() {
+  const session = {
+    access_token:
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImV4cIjoxfQ.invalid",
+    user: { id: "00000000-0000-0000-0000-000000000001", email: "attacker@evil.com" },
+  };
+  return sessionCookie(session);
+}
+
+async function sessionHardeningChecks() {
+  const findings = [];
+  const forged = userOnlyForgedCookie();
+  const invalid = invalidAccessTokenCookie();
+
+  const dashboardRes = await fetch(`${BASE}/dashboard`, {
+    redirect: "manual",
+    headers: { Cookie: forged },
+  });
+  if (dashboardRes.status !== 307 && dashboardRes.status !== 302) {
+    findings.push({
+      severity: "HIGH",
+      msg: `/dashboard forged user cookie expected redirect, got ${dashboardRes.status}`,
+    });
+  } else {
+    const location = dashboardRes.headers.get("location") ?? "";
+    if (!location.includes("/login")) {
+      findings.push({
+        severity: "HIGH",
+        msg: `/dashboard forged cookie redirect expected /login, got ${location}`,
+      });
+    }
+  }
+
+  const apiRes = await fetch(`${BASE}/api/dashboard`, { headers: { Cookie: forged } });
+  if (apiRes.status !== 401) {
+    findings.push({
+      severity: "HIGH",
+      msg: `/api/dashboard forged user cookie expected 401, got ${apiRes.status}`,
+    });
+  }
+
+  const invalidApi = await fetch(`${BASE}/api/dashboard`, { headers: { Cookie: invalid } });
+  if (invalidApi.status !== 401) {
+    findings.push({
+      severity: "HIGH",
+      msg: `/api/dashboard invalid JWT cookie expected 401, got ${invalidApi.status}`,
+    });
+  }
+
+  return findings;
+}
+
 async function main() {
   console.log(`\n🔒 Moto POS security audit → ${BASE}\n`);
 
@@ -106,7 +166,10 @@ async function main() {
   const adminCookie = await login(ADMIN_EMAIL, ADMIN_PASSWORD);
   const cashierCookie = await login(CASHIER_EMAIL, CASHIER_PASSWORD);
 
-  const findings = await securityChecks(adminCookie, cashierCookie);
+  const findings = [
+    ...(await securityChecks(adminCookie, cashierCookie)),
+    ...(await sessionHardeningChecks()),
+  ];
 
   if (findings.length === 0) {
     console.log("  ✅ Auth guards, role separation, and injection probe passed\n");

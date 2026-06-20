@@ -9,7 +9,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 # Moto POS agent rules
 
 - **Env:** `.env.local` for secrets; never commit. Use `.env.example` as template.
-- **Auth:** `requireProfile()` on API routes; `ADMIN_EMAIL` env for admin role.
+- **Auth:** `requireProfile()` on API routes; `ADMIN_EMAIL` env for admin role. Set `SUPABASE_JWT_SECRET` for JWT signature verification on page/API session checks.
 - **DB changes:** add numbered SQL under `supabase/migrations/`; apply via Supabase SQL Editor or `npm run migrate:*` scripts.
 - **Tests:** `npm run test:audit` before merge; CI runs seed + build + smoke + security.
 - **UI:** Joy UI components; match existing patterns in `src/components/`.

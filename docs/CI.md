@@ -117,6 +117,7 @@ jobs:
 | `NEXT_PUBLIC_SUPABASE_URL` | Staging Supabase project |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server tests + teardown |
+| `SUPABASE_JWT_SECRET` | JWT signature verification for session hardening (recommended) |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Admin test account |
 | `CASHIER_EMAIL` / `CASHIER_PASSWORD` | Cashier test account |
 

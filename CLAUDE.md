@@ -44,8 +44,8 @@ Browser (Joy UI) → Next.js API routes → Supabase Postgres
 
 | Concern | Location |
 | ------- | -------- |
-| Page auth redirects | `src/proxy.ts` (Next.js 16 — not `middleware.ts`) |
-| API auth | `requireProfile()` per route |
+| Page auth redirects | `src/proxy.ts` — validates Supabase JWT from cookies (exp + optional `SUPABASE_JWT_SECRET` signature) |
+| API auth | `requireProfile()` per route (same JWT validation via `session.ts`) |
 | Data layer | `src/lib/data/*` (service role client) |
 | Staff UI | `src/app/(app)/` |
 | Storefront | `src/app/(storefront)/` |
