@@ -1,0 +1,12 @@
+{
+  "files.associations": {
+    ".env.local": "dotenv",
+    ".env": "dotenv"
+  },
+  "files.readonlyExclude": {
+    "**/.env.local": true,
+    "**/.env": true,
+    "**/.env.*": true
+  "css.lint.unknownAtRules": "ignore",
+  "html.validate.styles": false
+}

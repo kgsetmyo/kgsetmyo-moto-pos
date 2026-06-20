@@ -1,0 +1,126 @@
+/**
+ * Moto POS security audit — auth, role separation, injection probes.
+ * Usage: SMOKE_INSECURE_TLS=1 node --env-file=.env.local scripts/security-audit.mjs
+ *
+ * Env: TEST_BASE_URL (default http://localhost:3000)
+ */
+import { createClient } from "@supabase/supabase-js";
+import { stringToBase64URL } from "@supabase/ssr";
+
+if (process.env.SMOKE_INSECURE_TLS === "1") {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
+
+const BASE = process.env.TEST_BASE_URL ?? "http://localhost:3000";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "admin@moto-parts.shop";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "admin123456";
+const CASHIER_EMAIL = process.env.CASHIER_EMAIL ?? "cashier@moto-parts.shop";
+const CASHIER_PASSWORD = process.env.CASHIER_PASSWORD ?? "cashier123456";
+
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+function sessionCookie(session) {
+  const ref = new URL(url).hostname.split(".")[0];
+  return `sb-${ref}-auth-token=${encodeURIComponent(`base64-${stringToBase64URL(JSON.stringify(session))}`)}`;
+}
+
+async function login(email, password) {
+  const supabase = createClient(url, anonKey);
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw new Error(error.message);
+  return sessionCookie(data.session);
+}
+
+async function securityChecks(adminCookie, cashierCookie) {
+  const findings = [];
+  const checks = [
+    { path: "/api/dashboard", unauth: 401 },
+    { path: "/api/inventory/valuation", unauth: 401, cashier: 403 },
+    { path: "/api/migrations/status", unauth: 401, cashier: 403 },
+    { path: "/api/settings", unauth: 401 },
+    { path: "/api/reports?type=z-report&date=2026-01-01", unauth: 401, cashier: 403 },
+    { path: "/api/analytics/trends?range=30d", unauth: 401, cashier: 403 },
+    { path: "/api/web-orders", unauth: 401, cashier: 200 },
+    { path: "/api/store/checkout", unauth: 401 },
+  ];
+
+  for (const c of checks) {
+    const unauth = await fetch(`${BASE}${c.path}`);
+    if (unauth.status !== c.unauth) {
+      findings.push({ severity: "HIGH", msg: `${c.path} unauth expected ${c.unauth}, got ${unauth.status}` });
+    }
+    if (c.cashier) {
+      const res = await fetch(`${BASE}${c.path}`, { headers: { Cookie: cashierCookie } });
+      if (res.status !== c.cashier) {
+        findings.push({ severity: "HIGH", msg: `${c.path} cashier expected ${c.cashier}, got ${res.status}` });
+      }
+    }
+  }
+
+  const patchRes = await fetch(`${BASE}/api/settings`, {
+    method: "PATCH",
+    headers: { Cookie: cashierCookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ businessName: "Hacked" }),
+  });
+  if (patchRes.status !== 403) {
+    findings.push({ severity: "HIGH", msg: `Cashier settings PATCH expected 403, got ${patchRes.status}` });
+  }
+
+  const sqli = await fetch(`${BASE}/api/products?q=${encodeURIComponent("'; DROP TABLE products; --")}`, {
+    headers: { Cookie: adminCookie },
+  });
+  if (sqli.status >= 500) {
+    findings.push({ severity: "MEDIUM", msg: "Search with SQL-like input returned 5xx" });
+  }
+
+  const body = await sqli.text();
+  if (body.includes("SERVICE_ROLE") || body.includes("service_role")) {
+    findings.push({ severity: "CRITICAL", msg: "Service role key leaked in API response" });
+  }
+
+  const batchRes = await fetch(`${BASE}/api/inventory/batches?productId=00000000-0000-0000-0000-000000000001`, {
+    headers: { Cookie: cashierCookie },
+  });
+  if (batchRes.ok) {
+    const batchData = await batchRes.json();
+    const leaked = (batchData.data ?? []).some((b) => "costPrice" in b);
+    if (leaked) findings.push({ severity: "HIGH", msg: "Cost price exposed to cashier in batches API" });
+  }
+
+  return findings;
+}
+
+async function main() {
+  console.log(`\n🔒 Moto POS security audit → ${BASE}\n`);
+
+  try {
+    await fetch(BASE);
+  } catch {
+    console.error(`❌ Cannot reach ${BASE} — run npm run dev or set TEST_BASE_URL to staging`);
+    process.exit(1);
+  }
+
+  const adminCookie = await login(ADMIN_EMAIL, ADMIN_PASSWORD);
+  const cashierCookie = await login(CASHIER_EMAIL, CASHIER_PASSWORD);
+
+  const findings = await securityChecks(adminCookie, cashierCookie);
+
+  if (findings.length === 0) {
+    console.log("  ✅ Auth guards, role separation, and injection probe passed\n");
+    process.exit(0);
+  }
+
+  for (const f of findings) {
+    console.log(`  ❌ [${f.severity}] ${f.msg}`);
+  }
+  console.log();
+
+  const fail = findings.some((f) => f.severity === "CRITICAL" || f.severity === "HIGH");
+  process.exit(fail ? 1 : 0);
+}
+
+main().catch((e) => {
+  console.error("Security audit failed:", e.message);
+  process.exit(1);
+});
