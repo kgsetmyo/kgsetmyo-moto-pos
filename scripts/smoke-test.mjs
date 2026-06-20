@@ -21,6 +21,12 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+function ciSmokeNote() {
+  const base = process.env.CI_SMOKE_NOTE ?? "CI smoke test transaction";
+  const runId = process.env.GITHUB_RUN_ID?.trim();
+  return runId ? `${base} (run ${runId})` : base;
+}
+
 let passed = 0;
 let failed = 0;
 
@@ -265,6 +271,7 @@ async function testCheckout(admin) {
     body: {
       lines: [{ productId: product.id, quantity: 1, unitPrice: price }],
       payments: [{ method: "CASH", amount: price }],
+      notes: ciSmokeNote(),
     },
   });
 
@@ -512,6 +519,7 @@ async function testSplitPayment(admin) {
           slipUrl: "https://placehold.co/100x100.png",
         },
       ],
+      notes: ciSmokeNote(),
     },
   });
   if (saleOk && res.status === 201) {
@@ -560,6 +568,7 @@ async function testCreditFlow(admin) {
       customerId: customer.id,
       lines: [{ productId: product.id, quantity: 1, unitPrice: price }],
       payments: [{ method: "CREDIT", amount: price }],
+      notes: ciSmokeNote(),
     },
   });
   if (!saleOk || saleRes.status !== 201) {

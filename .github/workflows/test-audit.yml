@@ -6,6 +6,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: test-audit-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   audit:
     runs-on: ubuntu-latest
@@ -21,6 +25,8 @@ jobs:
       CASHIER_PASSWORD: ${{ secrets.CASHIER_PASSWORD }}
       TEST_BASE_URL: http://localhost:3000
       SMOKE_INSECURE_TLS: "1"
+      CI_SMOKE_NOTE: CI smoke test transaction
+      GITHUB_RUN_ID: ${{ github.run_id }}
 
     steps:
       - uses: actions/checkout@v4
@@ -46,13 +52,18 @@ jobs:
             echo "CASHIER_PASSWORD=$CASHIER_PASSWORD"
             echo "TEST_BASE_URL=$TEST_BASE_URL"
             echo "SMOKE_INSECURE_TLS=$SMOKE_INSECURE_TLS"
+            echo "CI_SMOKE_NOTE=$CI_SMOKE_NOTE"
+            echo "GITHUB_RUN_ID=$GITHUB_RUN_ID"
           } > .env.local
 
-      - name: Seed test data
-        run: npm run seed
+      - name: Lint and typecheck
+        run: npm run lint && npx tsc --noEmit
 
       - name: Build
         run: npm run build
+
+      - name: Seed test data
+        run: npm run seed
 
       - name: Start server
         run: npm run start &
@@ -60,5 +71,9 @@ jobs:
       - name: Wait for server
         run: npx wait-on http://localhost:3000 --timeout 60000
 
-      - name: Run test audit
-        run: npm run test:audit
+      - name: Smoke + security
+        run: npm run test:smoke && npm run test:security
+
+      - name: Teardown CI artifacts
+        if: always()
+        run: npm run test:ci:teardown
