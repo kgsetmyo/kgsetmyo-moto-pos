@@ -12,9 +12,12 @@ import { useReactToPrint } from "react-to-print";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { jsonFetcher } from "@/lib/api/fetcher";
 
-interface ThermalReceiptProps {
-  sale: Record<string, unknown>;
-}
+type ReceiptSettings = {
+  businessName?: string;
+  phone?: string | null;
+  address?: string | null;
+  logoUrl?: string | null;
+};
 
 type SaleLineItem = {
   product?: { name?: string };
@@ -31,19 +34,33 @@ type SalePayment = {
   amount?: number;
 };
 
+interface ThermalReceiptProps {
+  sale: Record<string, unknown>;
+  settings?: ReceiptSettings;
+}
+
 const monoSx = { fontFamily: "monospace" } as const;
 
-export function ThermalReceipt({ sale }: ThermalReceiptProps) {
+function formatPaymentMethod(method: string) {
+  return method.replace(/_/g, " ");
+}
+
+export function ThermalReceipt({ sale, settings: settingsOverride }: ThermalReceiptProps) {
   const printRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({ contentRef: printRef });
-  const { data: settings } = useSWR("/api/settings", jsonFetcher);
+  const shouldFetchSettings = settingsOverride === undefined;
+  const { data: fetchedSettings } = useSWR<ReceiptSettings>(
+    shouldFetchSettings ? "/api/settings" : null,
+    jsonFetcher
+  );
+  const settings = settingsOverride ?? fetchedSettings;
 
   const lineItems = (sale.lineItems as SaleLineItem[] | undefined) ?? [];
   const payments = (sale.payments as SalePayment[] | undefined) ?? [];
   const shopName = settings?.businessName ?? "Moto Parts POS";
   const invoiceNumber = String(sale.invoiceNumber ?? sale.invoice_number ?? "");
   const createdAt = formatDateTime(String(sale.createdAt ?? sale.created_at ?? new Date()));
-  const total = formatCurrency(Number(sale.total ?? 0));
+  const totalLabel = formatCurrency(Number(sale.total ?? 0));
 
   return (
     <Stack spacing={1}>
@@ -97,32 +114,41 @@ export function ThermalReceipt({ sale }: ThermalReceiptProps) {
         <Divider sx={{ my: 0.5 }} />
 
         <Stack spacing={0.5}>
-          {lineItems.map((item, index) => (
-            <Box key={index} sx={monoSx}>
-              <Box>{String(item.product?.name ?? item.name ?? "Item")}</Box>
-              <Box>
-                {Number(item.quantity ?? 0)} x{" "}
-                {formatCurrency(Number(item.unitPrice ?? item.unit_price ?? 0))} ={" "}
-                {formatCurrency(Number(item.lineTotal ?? item.line_total ?? 0))}
+          {lineItems.map((item, index) => {
+            const itemName = String(item.product?.name ?? item.name ?? "Item");
+            const qty = Number(item.quantity ?? 0);
+            const unitPrice = formatCurrency(Number(item.unitPrice ?? item.unit_price ?? 0));
+            const lineTotal = formatCurrency(Number(item.lineTotal ?? item.line_total ?? 0));
+
+            return (
+              <Box key={index} sx={monoSx}>
+                <Box>{itemName}</Box>
+                <Box>
+                  {qty} x {unitPrice} = {lineTotal}
+                </Box>
               </Box>
-            </Box>
-          ))}
+            );
+          })}
         </Stack>
 
         <Divider sx={{ my: 0.5 }} />
 
         <Typography level="title-sm" textAlign="right" sx={monoSx}>
-          TOTAL: {total}
+          TOTAL: {totalLabel}
         </Typography>
 
         {payments.length > 0 ? (
           <Stack spacing={0.25} sx={{ mt: 0.25 }}>
-            {payments.map((payment, index) => (
-              <Typography key={index} level="body-xs" sx={monoSx}>
-                {String(payment.method ?? "payment").replaceAll("_", " ")}:{" "}
-                {formatCurrency(Number(payment.amount ?? 0))}
-              </Typography>
-            ))}
+            {payments.map((payment, index) => {
+              const method = formatPaymentMethod(String(payment.method ?? "payment"));
+              const amount = formatCurrency(Number(payment.amount ?? 0));
+
+              return (
+                <Typography key={index} level="body-xs" sx={monoSx}>
+                  {method}: {amount}
+                </Typography>
+              );
+            })}
           </Stack>
         ) : null}
 
