@@ -9,7 +9,7 @@ Cloud Web POS + FIFO inventory for Myanmar motorcycle spare parts shops.
 ```bash
 cd moto-pos
 cp .env.example .env.local
-# Fill in Supabase URL, anon key, service role key
+# Fill in Supabase URL, anon key, service role key, and account credentials (ADMIN_EMAIL, etc.)
 
 # Run ALL migrations in Supabase SQL Editor (in order):
 #   supabase/migrations/001_initial_schema.sql
@@ -21,7 +21,7 @@ cp .env.example .env.local
 #   supabase/migrations/007_void_sale_rpc.sql            (optional, recommended)
 #   supabase/migrations/008_payment_method_credit.sql  (if credit sales fail)
 
-npm run admin:create   # admin@moto-parts.shop / admin123456
+npm run admin:create   # uses ADMIN_EMAIL / ADMIN_PASSWORD from .env
 npm run seed           # sample product + stock
 npm run dev            # http://localhost:3000
 ```
@@ -37,10 +37,14 @@ $env:SMOKE_INSECURE_TLS=1; npm run migrate:optional   # if DIRECT_URL pooler wor
 
 ## Test Accounts
 
-| Role    | Email                   | Password       |
-|---------|-------------------------|----------------|
-| Admin   | admin@moto-parts.shop   | admin123456    |
-| Cashier | cashier@moto-parts.shop | cashier123456 |
+Set credentials in `.env` / `.env.local` (see `.env.example`):
+
+| Variable | Purpose |
+|----------|---------|
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Admin login & smoke tests |
+| `CASHIER_EMAIL` / `CASHIER_PASSWORD` | Cashier login & role tests |
+
+Create accounts with `npm run admin:create` and `npm run cashier:create`.
 
 ## Architecture
 

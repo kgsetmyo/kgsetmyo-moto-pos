@@ -6,16 +6,18 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { stringToBase64URL } from "@supabase/ssr";
+import { loadEnvFiles } from "./load-env.mjs";
+import { getAdminCredentials, getCashierCredentials } from "./test-credentials.mjs";
+
+loadEnvFiles();
 
 if (process.env.SMOKE_INSECURE_TLS === "1") {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 }
 
 const BASE = process.env.TEST_BASE_URL ?? "http://localhost:3000";
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "admin@moto-parts.shop";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "admin123456";
-const CASHIER_EMAIL = process.env.CASHIER_EMAIL ?? "cashier@moto-parts.shop";
-const CASHIER_PASSWORD = process.env.CASHIER_PASSWORD ?? "cashier123456";
+const { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } = getAdminCredentials();
+const { email: CASHIER_EMAIL, password: CASHIER_PASSWORD } = getCashierCredentials();
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

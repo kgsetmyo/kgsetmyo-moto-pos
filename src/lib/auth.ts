@@ -11,7 +11,8 @@ function normalizeRole(role: string | null | undefined): UserRole {
 }
 
 function isAdminEmail(email: string | null | undefined) {
-  const adminEmail = process.env.ADMIN_EMAIL ?? "admin@moto-parts.shop";
+  const adminEmail = process.env.ADMIN_EMAIL?.trim();
+  if (!adminEmail) return false;
   return email?.toLowerCase() === adminEmail.toLowerCase();
 }
 

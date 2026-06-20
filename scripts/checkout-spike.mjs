@@ -6,6 +6,10 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { stringToBase64URL } from "@supabase/ssr";
+import { loadEnvFiles } from "./load-env.mjs";
+import { getCashierCredentials } from "./test-credentials.mjs";
+
+loadEnvFiles();
 
 if (process.env.SMOKE_INSECURE_TLS === "1") {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -15,8 +19,7 @@ const BASE = process.env.TEST_BASE_URL ?? "http://localhost:3000";
 const CONCURRENCY = Number(process.env.SPIKE_CONCURRENCY ?? 25);
 const ITERATIONS = Number(process.env.SPIKE_ITERATIONS ?? 20);
 const LOAD_NOTE = process.env.LOAD_TEST_NOTE ?? "Load test automated transaction";
-const EMAIL = process.env.CASHIER_EMAIL ?? "cashier@moto-parts.shop";
-const PASSWORD = process.env.CASHIER_PASSWORD ?? "cashier123456";
+const { email: EMAIL, password: PASSWORD } = getCashierCredentials();
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

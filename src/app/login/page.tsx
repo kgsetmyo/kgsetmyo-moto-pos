@@ -23,6 +23,9 @@ export default function LoginPage() {
     setError("");
 
     const supabase = createClient();
+    // Clear any stale session cookie before a fresh sign-in attempt
+    await supabase.auth.signOut();
+
     const { error: authError } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password,
@@ -75,12 +78,6 @@ export default function LoginPage() {
               required
             />
           </FormControl>
-
-          {process.env.NODE_ENV === "development" && (
-            <Typography level="body-xs" textColor="neutral.500" sx={{ bgcolor: "background.level2", p: 1, borderRadius: "sm" }}>
-              Dev login: admin@moto-parts.shop / admin123456
-            </Typography>
-          )}
 
           {error && (
             <Typography level="body-sm" color="danger">

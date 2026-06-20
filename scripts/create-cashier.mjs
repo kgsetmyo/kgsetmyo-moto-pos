@@ -3,9 +3,17 @@
  * Usage: node --env-file=.env.local scripts/create-cashier.mjs
  */
 import { createClient } from "@supabase/supabase-js";
+import { loadEnvFiles } from "./load-env.mjs";
+import { requireEnv } from "./test-credentials.mjs";
 
-const CASHIER_EMAIL = process.env.CASHIER_EMAIL ?? "cashier@moto-parts.shop";
-const CASHIER_PASSWORD = process.env.CASHIER_PASSWORD ?? "cashier123456";
+loadEnvFiles();
+
+if (process.env.SMOKE_INSECURE_TLS === "1") {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
+
+const CASHIER_EMAIL = requireEnv("CASHIER_EMAIL");
+const CASHIER_PASSWORD = requireEnv("CASHIER_PASSWORD");
 const CASHIER_NAME = process.env.CASHIER_NAME ?? "Shop Cashier";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

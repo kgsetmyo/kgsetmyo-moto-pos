@@ -1,5 +1,5 @@
 /**
- * Load .env.local into process.env, overriding stale shell variables.
+ * Load .env then .env.local into process.env (local overrides).
  * Node --env-file does not override existing env vars on Windows shells.
  */
 import { readFileSync, existsSync } from "fs";
@@ -7,9 +7,8 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const envPath = join(root, ".env.local");
 
-export function loadEnvLocal() {
+function parseEnvFile(envPath) {
   if (!existsSync(envPath)) return;
 
   for (const line of readFileSync(envPath, "utf8").split(/\r?\n/)) {
@@ -27,4 +26,14 @@ export function loadEnvLocal() {
     }
     process.env[key] = value;
   }
+}
+
+/** @deprecated use loadEnvFiles */
+export function loadEnvLocal() {
+  loadEnvFiles();
+}
+
+export function loadEnvFiles() {
+  parseEnvFile(join(root, ".env"));
+  parseEnvFile(join(root, ".env.local"));
 }

@@ -24,8 +24,11 @@ const checkoutErrors = new Rate("checkout_errors");
 const BASE = __ENV.BASE_URL || "http://localhost:3000";
 const SUPABASE_URL = __ENV.SUPABASE_URL || __ENV.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = __ENV.SUPABASE_ANON_KEY || __ENV.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const EMAIL = __ENV.CASHIER_EMAIL || "cashier@moto-parts.shop";
-const PASSWORD = __ENV.CASHIER_PASSWORD || "cashier123456";
+const EMAIL = __ENV.CASHIER_EMAIL;
+const PASSWORD = __ENV.CASHIER_PASSWORD;
+if (!EMAIL || !PASSWORD) {
+  throw new Error("CASHIER_EMAIL and CASHIER_PASSWORD must be set in the environment");
+}
 const LOAD_NOTE = __ENV.LOAD_TEST_NOTE || "Load test automated transaction";
 const SCENARIO = __ENV.SCENARIO || "default";
 

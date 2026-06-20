@@ -26,6 +26,8 @@
     "migrate:009": "node --env-file=.env.local scripts/migrate-009.mjs",
     "migrate:010": "node --env-file=.env.local scripts/migrate-010.mjs",
     "migrate:011": "node --env-file=.env.local scripts/migrate-011.mjs",
+    "auth:check": "node --env-file=.env.local scripts/check-auth-users.mjs",
+    "auth:cleanup": "node --env-file=.env.local scripts/remove-auth-users.mjs",
     "verify:009": "node --env-file=.env.local scripts/verify-009.mjs",
     "teardown:load-test": "node --env-file=.env.local scripts/teardown-via-cli.mjs",
     "teardown:load-test:api": "node --env-file=.env.local scripts/teardown-load-test-api.mjs",

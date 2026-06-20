@@ -3,9 +3,17 @@
  * Usage: node --env-file=.env.local scripts/create-admin.mjs
  */
 import { createClient } from "@supabase/supabase-js";
+import { loadEnvFiles } from "./load-env.mjs";
+import { requireEnv } from "./test-credentials.mjs";
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "admin@moto-parts.shop";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "admin123456";
+loadEnvFiles();
+
+if (process.env.SMOKE_INSECURE_TLS === "1") {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
+
+const ADMIN_EMAIL = requireEnv("ADMIN_EMAIL");
+const ADMIN_PASSWORD = requireEnv("ADMIN_PASSWORD");
 const ADMIN_NAME = process.env.ADMIN_NAME ?? "Shop Admin";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
