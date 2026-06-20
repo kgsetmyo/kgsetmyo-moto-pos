@@ -16,23 +16,42 @@ interface ThermalReceiptProps {
   sale: Record<string, unknown>;
 }
 
+type SaleLineItem = Record<string, unknown> & {
+  product?: Record<string, unknown>;
+  name?: string;
+  quantity?: number;
+  unitPrice?: number;
+  unit_price?: number;
+  lineTotal?: number;
+  line_total?: number;
+};
+
+type SalePayment = Record<string, unknown> & {
+  method?: string;
+  amount?: number;
+};
+
 export function ThermalReceipt({ sale }: ThermalReceiptProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const handlePrint = useReactToPrint({ contentRef: ref });
+  const printRef = useRef<HTMLDivElement>(null);
+  const handlePrint = useReactToPrint({ contentRef: printRef });
   const { data: settings } = useSWR("/api/settings", jsonFetcher);
 
-  const lineItems = (sale.lineItems as Array<Record<string, unknown>>) ?? [];
-  const payments = (sale.payments as Array<Record<string, unknown>> | undefined) ?? [];
+  const lineItems = (sale.lineItems as SaleLineItem[] | undefined) ?? [];
+  const payments = (sale.payments as SalePayment[] | undefined) ?? [];
   const shopName = settings?.businessName ?? "Moto Parts POS";
   const shopPhone = settings?.phone;
   const shopAddress = settings?.address;
   const shopLogo = settings?.logoUrl;
-  const mono = { fontFamily: "monospace" };
+  const monoSx = { fontFamily: "monospace" } as const;
+
+  const invoiceNumber = String(sale.invoiceNumber ?? sale.invoice_number ?? "");
+  const createdAt = formatDateTime(String(sale.createdAt ?? sale.created_at ?? new Date()));
+  const total = formatCurrency(Number(sale.total ?? 0));
 
   return (
     <Stack spacing={1}>
       <Sheet
-        ref={ref}
+        ref={printRef}
         className="thermal-receipt"
         sx={{
           width: "80mm",
@@ -70,43 +89,41 @@ export function ThermalReceipt({ sale }: ThermalReceiptProps) {
               {shopAddress}
             </Typography>
           ) : null}
-          <Typography level="body-xs" textAlign="center" sx={mono}>
-            {String(sale.invoiceNumber ?? sale.invoice_number ?? "")}
+          <Typography level="body-xs" textAlign="center" sx={monoSx}>
+            {invoiceNumber}
           </Typography>
-          <Typography level="body-xs" textAlign="center" sx={mono}>
-            {formatDateTime(String(sale.createdAt ?? sale.created_at ?? new Date()))}
+          <Typography level="body-xs" textAlign="center" sx={monoSx}>
+            {createdAt}
           </Typography>
         </Stack>
 
         <Divider sx={{ my: 0.5 }} />
 
         <Stack spacing={0.5}>
-          {lineItems.map((item, i) => {
-            const product = item.product as Record<string, unknown> | undefined;
-            return (
-              <Box key={i} sx={mono}>
-                <Box>{String(product?.name ?? item.name ?? "Item")}</Box>
-                <Box>
-                  {Number(item.quantity)} x{" "}
-                  {formatCurrency(Number(item.unitPrice ?? item.unit_price))} ={" "}
-                  {formatCurrency(Number(item.lineTotal ?? item.line_total))}
-                </Box>
+          {lineItems.map((item, index) => (
+            <Box key={index} sx={monoSx}>
+              <Box>{String(item.product?.name ?? item.name ?? "Item")}</Box>
+              <Box>
+                {Number(item.quantity ?? 0)} x{" "}
+                {formatCurrency(Number(item.unitPrice ?? item.unit_price ?? 0))} ={" "}
+                {formatCurrency(Number(item.lineTotal ?? item.line_total ?? 0))}
               </Box>
-            );
-          })}
+            </Box>
+          ))}
         </Stack>
 
         <Divider sx={{ my: 0.5 }} />
 
-        <Typography level="title-sm" textAlign="right" sx={mono}>
-          TOTAL: {formatCurrency(Number(sale.total))}
+        <Typography level="title-sm" textAlign="right" sx={monoSx}>
+          {`TOTAL: ${total}`}
         </Typography>
 
         {payments.length > 0 ? (
           <Stack spacing={0.25}>
-            {payments.map((p, i) => (
-              <Typography key={i} level="body-xs" sx={mono}>
-                {String(p.method).replace("_", " ")}: {formatCurrency(Number(p.amount))}
+            {payments.map((payment, index) => (
+              <Typography key={index} level="body-xs" sx={monoSx}>
+                {String(payment.method ?? "payment").replaceAll("_", " ")}:{" "}
+                {formatCurrency(Number(payment.amount ?? 0))}
               </Typography>
             ))}
           </Stack>

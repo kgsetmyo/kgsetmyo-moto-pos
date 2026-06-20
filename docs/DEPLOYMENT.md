@@ -4,7 +4,7 @@
 
 - [GitHub](https://github.com) account with this repo pushed
 - [Vercel](https://vercel.com) account (free tier works)
-- Supabase project with all migrations applied (`001`–`004` required, `005`–`008` recommended — see `optional_bundle.sql`, `009` for production hardening)
+- Supabase project with migrations applied (`001`–`004` required; `005`–`009` recommended; `010`–`011` for analytics + storefront)
 
 ## 1. Push code to GitHub
 
@@ -30,50 +30,72 @@ git push -u origin main
 
 In Vercel → Project → **Settings → Environment Variables**, add:
 
-| Variable | Value | Notes |
-|----------|-------|-------|
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://xxx.supabase.co` | Supabase → Settings → API |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `eyJ...` | Public anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | `eyJ...` | **Secret** — server only |
-| `DATABASE_URL` | Pooler URI port **6543** | Transaction mode — scripts/seeds (`pgbouncer=true`) |
-| `DIRECT_URL` | Pooler URI port **5432** | Session mode — migrations, teardown SQL |
+| Variable                        | Value                     | Notes                                   |
+| ------------------------------- | ------------------------- | --------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`      | `https://xxx.supabase.co` | Supabase → Settings → API               |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `eyJ...`                  | Public anon key                         |
+| `SUPABASE_SERVICE_ROLE_KEY`     | `eyJ...`                  | **Secret** — server only                |
+| `ADMIN_EMAIL`                   | `admin@example.com`       | Must match Supabase admin user email    |
+| `DATABASE_URL`                  | Pooler URI port **6543**  | Transaction mode — scripts/seeds        |
+| `DIRECT_URL`                    | Pooler URI port **5432**  | Session mode — migrations, teardown SQL |
 
 Copy the full production layout from `.env.production.example`. The Next.js runtime uses the Supabase HTTPS API; `DATABASE_URL` / `DIRECT_URL` are for CLI scripts and SQL tooling only.
 
 Apply to: **Production**, **Preview**, **Development**.
 
-## 4. Deploy
+## 4. GitHub Actions secrets (CI)
+
+For the `test-audit` workflow (`.github/workflows/test-audit.yml`), add these in GitHub → **Settings → Secrets and variables → Actions**:
+
+| Secret                          | Purpose                    |
+| ------------------------------- | -------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`      | Staging Supabase project   |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public anon key            |
+| `SUPABASE_SERVICE_ROLE_KEY`     | Server-side tests          |
+| `ADMIN_EMAIL`                   | Test admin account         |
+| `ADMIN_PASSWORD`                | Test admin password        |
+| `CASHIER_EMAIL`                 | Test cashier account       |
+| `CASHIER_PASSWORD`              | Test cashier password      |
+
+The workflow creates `.env.local` from these secrets before running `npm run build` and `npm run test:audit`. Use a **staging** Supabase project — never production data.
+
+See [CI.md](./CI.md) for branch protection setup.
+
+## 5. Deploy
 
 Click **Deploy**. Vercel runs `npm run build` automatically.
 
 Your app will be live at: `https://your-project.vercel.app`
 
-## 5. Supabase auth redirect URLs
+## 6. Supabase auth redirect URLs
 
 In **Supabase → Authentication → URL Configuration**, add:
 
 - **Site URL:** `https://your-project.vercel.app`
 - **Redirect URLs:** `https://your-project.vercel.app/**`
 
-## 6. Post-deploy checklist
+## 7. Post-deploy checklist
 
 ```bash
 npm run migrate:check
-# Apply production hardening (FIFO index + row locks):
-# Paste supabase/migrations/009_production_hardening.sql in Supabase SQL Editor
+# Apply any pending migrations in Supabase SQL Editor:
+#   009_production_hardening.sql
+#   010_analytics_mv.sql
+#   011_omnichannel.sql
 
-npm run test:audit   # lint + tsc + smoke + security (dev server required)
+npm run test:audit   # lint + tsc + smoke + security (dev server required locally)
 ```
-
-See `docs/CI.md` for GitHub Actions and Vercel gate setup.
 
 - [ ] Login works on production URL
 - [ ] POS checkout (cash, mobile, credit, split) completes
 - [ ] Credit payment and void sale work
 - [ ] Mobile slip upload works (`slips` bucket from migration 003)
 - [ ] Admin vs Cashier roles behave correctly (cashier cannot see cost prices)
+- [ ] `/shop` storefront loads and checkout creates web orders
+- [ ] `/web-orders` staff panel receives Realtime alerts (enable Realtime on `sales` in Supabase)
+- [ ] Analytics dashboard loads (enable pg_cron for MV refresh if using migration 010)
 
-## 7. Custom domain (optional)
+## 8. Custom domain (optional)
 
 Vercel → Project → **Domains** → add your shop domain (e.g. `pos.yourshop.com`).
 
@@ -81,14 +103,15 @@ Update Supabase redirect URLs to match.
 
 ## Troubleshooting
 
-| Issue | Fix |
-|-------|-----|
-| Login fails on Vercel | Add production URL to Supabase redirect URLs |
-| Checkout 503 | Run `003_create_sale_rpc.sql` in Supabase |
-| Credit sales fail | Run `008_payment_method_credit.sql` or full `optional_bundle.sql` |
-| Void slow / errors | Run `007_void_sale_rpc.sql` |
-| API 500 on dashboard | Check `SUPABASE_SERVICE_ROLE_KEY` is set in Vercel |
-| Build fails | Run `npm run build` locally first to catch TypeScript errors |
+| Issue                 | Fix                                                                 |
+| --------------------- | ------------------------------------------------------------------- |
+| Login fails on Vercel | Add production URL to Supabase redirect URLs; set `ADMIN_EMAIL`     |
+| Checkout 503          | Run `003_create_sale_rpc.sql` in Supabase                           |
+| Credit sales fail     | Run `008_payment_method_credit.sql` or full `optional_bundle.sql`   |
+| Void slow / errors    | Run `007_void_sale_rpc.sql`                                         |
+| API 500 on dashboard  | Check `SUPABASE_SERVICE_ROLE_KEY` is set in Vercel                  |
+| Build fails           | Run `npm run build` locally first to catch TypeScript errors       |
+| CI smoke tests fail   | Verify all 8 GitHub secrets are set; check staging auth users exist |
 
 ## Redeploy after changes
 
