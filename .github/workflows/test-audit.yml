@@ -48,6 +48,9 @@ jobs:
             echo "SMOKE_INSECURE_TLS=$SMOKE_INSECURE_TLS"
           } > .env.local
 
+      - name: Seed test data
+        run: npm run seed
+
       - name: Build
         run: npm run build
 
