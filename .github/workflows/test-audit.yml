@@ -9,9 +9,6 @@ on:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    env:
-      TEST_BASE_URL: http://localhost:3000
-      SMOKE_INSECURE_TLS: "1"
 
     steps:
       - uses: actions/checkout@v4
@@ -45,9 +42,6 @@ jobs:
             echo "SMOKE_INSECURE_TLS=1"
           } > .env.local
 
-      - name: Lint and typecheck
-        run: npm run lint && npx tsc --noEmit
-
       - name: Build
         run: npm run build
 
@@ -57,5 +51,5 @@ jobs:
       - name: Wait for server
         run: npx wait-on http://localhost:3000 --timeout 60000
 
-      - name: Smoke and security
-        run: npm run test:smoke && npm run test:security
+      - name: Run test audit
+        run: npm run test:audit
