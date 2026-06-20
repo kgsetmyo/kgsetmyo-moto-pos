@@ -1,6 +1,6 @@
 # CI/CD quality gate
 
-Block merges to `main` until the GitHub **Test Audit** workflow passes.
+Block merges to `main` until the GitHub **Test Audit** workflow passes. Complete [BRANCH_PROTECTION.md](./BRANCH_PROTECTION.md) in GitHub settings after the first green run.
 
 ## What runs locally vs CI
 
@@ -13,14 +13,20 @@ npm run test:smoke    # Integration flows (needs running app + Supabase)
 npm run test:security # Auth, role separation, injection probes
 ```
 
-**CI workflow** (`.github/workflows/test-audit.yml`) runs a stricter sequence:
+**Local dependency audit** (same threshold as CI):
+
+```bash
+npm run audit:ci      # fails on high/critical CVEs only
+```
+
+**CI workflow** (`.github/workflows/test-audit.yml`):
 
 1. `npm ci`
-2. Lint + typecheck
-3. **Production build** (`npm run build`)
-4. **Seed** staging data (`npm run seed`) — ensures `SP-CLICK-001` stock for smoke tests
-5. Start server → wait-on → smoke + security
-6. **Teardown** (`npm run test:ci:teardown`, `if: always()`) — void tagged sales, deactivate stray customers
+2. **`npm run audit:ci`** — block high/critical vulnerabilities
+3. Lint + typecheck
+4. **Next.js build cache** restore → production build
+5. Seed staging data → start server → smoke + security
+6. Teardown (`if: always()`)
 
 Optional heavier checks (not in CI):
 
@@ -28,87 +34,41 @@ Optional heavier checks (not in CI):
 npm run test:stress   # Read-load performance (manual / nightly)
 ```
 
-## GitHub Actions workflow
+## Hardening (Track D)
 
-The live workflow adds:
+| Control | Implementation |
+|---------|----------------|
+| Pinned GitHub Actions | Commit SHAs in workflow (not `@v4` tags) |
+| Least privilege | `permissions: contents: read` |
+| Concurrency | Cancel overlapping runs on same branch |
+| Dependency updates | `.github/dependabot.yml` (npm + actions, weekly) |
+| CVE gate | `npm run audit:ci` (`--audit-level=high`) |
+| Build cache | `actions/cache` for `.next/cache` |
+| Pinned `wait-on` | devDependency + `npx --no-install wait-on` |
+| Branch protection | Manual checklist → [BRANCH_PROTECTION.md](./BRANCH_PROTECTION.md) |
 
-- **`concurrency`** — cancels overlapping runs on the same branch
-- **`CI_SMOKE_NOTE` / `GITHUB_RUN_ID`** — smoke sales are tagged for teardown
-- **Best-effort teardown** — never fails the job; cleans staging after each run
+### Pinned action SHAs
 
-```yaml
-name: Test Audit
+Update when Dependabot opens an actions bump PR, or resolve manually:
 
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-
-concurrency:
-  group: test-audit-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-jobs:
-  audit:
-    runs-on: ubuntu-latest
-    env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      DIRECT_URL: ${{ secrets.DIRECT_URL }}
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-      CASHIER_EMAIL: ${{ secrets.CASHIER_EMAIL }}
-      CASHIER_PASSWORD: ${{ secrets.CASHIER_PASSWORD }}
-      TEST_BASE_URL: http://localhost:3000
-      SMOKE_INSECURE_TLS: "1"
-      CI_SMOKE_NOTE: CI smoke test transaction
-      GITHUB_RUN_ID: ${{ github.run_id }}
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-      - run: npm ci
-      - name: Create .env.local from secrets
-        run: |
-          {
-            echo "DATABASE_URL=$DATABASE_URL"
-            echo "DIRECT_URL=$DIRECT_URL"
-            echo "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL"
-            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY"
-            echo "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY"
-            echo "ADMIN_EMAIL=$ADMIN_EMAIL"
-            echo "ADMIN_PASSWORD=$ADMIN_PASSWORD"
-            echo "CASHIER_EMAIL=$CASHIER_EMAIL"
-            echo "CASHIER_PASSWORD=$CASHIER_PASSWORD"
-            echo "TEST_BASE_URL=$TEST_BASE_URL"
-            echo "SMOKE_INSECURE_TLS=$SMOKE_INSECURE_TLS"
-            echo "CI_SMOKE_NOTE=$CI_SMOKE_NOTE"
-            echo "GITHUB_RUN_ID=$GITHUB_RUN_ID"
-          } > .env.local
-      - name: Lint and typecheck
-        run: npm run lint && npx tsc --noEmit
-      - name: Build
-        run: npm run build
-      - name: Seed test data
-        run: npm run seed
-      - name: Start server
-        run: npm run start &
-      - name: Wait for server
-        run: npx wait-on http://localhost:3000 --timeout 60000
-      - name: Smoke + security
-        run: npm run test:smoke && npm run test:security
-      - name: Teardown CI artifacts
-        if: always()
-        run: npm run test:ci:teardown
+```bash
+# Example: resolve v4 tag head for actions/checkout
+curl -s https://api.github.com/repos/actions/checkout/git/refs/tags/v4 | jq -r .object.sha
 ```
 
-### Required GitHub secrets
+Current pins (2026-06):
+
+| Action | SHA | Tag |
+|--------|-----|-----|
+| `actions/checkout` | `34e114876b0b11c390a56381ad16ebd13914f8d5` | v4 |
+| `actions/setup-node` | `49933ea5288caeca8642d1e84afbd3f7d6820020` | v4 |
+| `actions/cache` | `0057852bfaa89a56745cba8c7296529d2fc39830` | v4 |
+
+### npm audit policy
+
+CI fails on **high** and **critical** advisories. Moderate/low are reported but do not block (e.g. transitive PostCSS via Next until upstream fixes land). Run `npm audit` locally for the full report.
+
+## Required GitHub secrets
 
 | Secret | Purpose |
 |--------|---------|
@@ -117,30 +77,15 @@ jobs:
 | `NEXT_PUBLIC_SUPABASE_URL` | Staging Supabase project |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server tests + teardown |
-| `SUPABASE_JWT_SECRET` | JWT signature verification for session hardening (recommended) |
+| `SUPABASE_JWT_SECRET` | JWT signature verification (recommended) |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Admin test account |
 | `CASHIER_EMAIL` / `CASHIER_PASSWORD` | Cashier test account |
 
 Use a **staging** Supabase project — never production data.
 
-### Branch protection
-
-GitHub → Repository → **Settings → Branches → Branch protection rules**:
-
-1. Require status check **Test Audit / audit**
-2. Require branches to be up to date before merging
-
 ## CI teardown
 
-Smoke tests tag completed sales with `CI smoke test transaction (run {id})`. After each run, `scripts/ci-teardown.mjs`:
-
-- Voids matching **COMPLETED** in-store sales
-- Deactivates active customers named `Smoke Test …` or `Credit …`
-- Removes orphan `SmokeBrand…` bike brands
-
-Teardown is **best-effort** (exit 0) so a cleanup glitch does not fail a green test run.
-
-Local manual cleanup:
+Smoke tests tag completed sales with `CI smoke test transaction (run {id})`. After each run, `scripts/ci-teardown.mjs` voids tagged sales, deactivates stray customers, and removes orphan smoke bike brands. Best-effort (exit 0).
 
 ```bash
 npm run test:ci:teardown
@@ -148,11 +93,9 @@ npm run test:ci:teardown
 
 ## Vercel deployment gate
 
-Vercel does not run integration tests by default. Options:
-
 ### Option A — GitHub required check (recommended)
 
-Enable branch protection with the workflow above. Vercel deploys after merge; tests block the merge.
+Enable branch protection with **Test Audit / audit**. Vercel deploys after merge; tests block the merge. See [BRANCH_PROTECTION.md](./BRANCH_PROTECTION.md).
 
 ### Option B — Vercel ignored build step
 
@@ -162,35 +105,20 @@ Project → **Settings → Git** → **Ignored Build Step**:
 if [ "$VERCEL_GIT_COMMIT_REF" = "main" ]; then exit 1; else exit 0; fi
 ```
 
-Deploy `main` only from merges that already passed GitHub Actions.
-
 ### Option C — Preview smoke against staging URL
 
-Set `TEST_BASE_URL` to the Vercel preview URL in a post-deploy GitHub Action or manual `npm run test:smoke`.
+Set `TEST_BASE_URL` to the Vercel preview URL in a post-deploy job or run `npm run test:smoke` manually.
 
 ## Load test teardown
 
-After k6 or concurrent checkout tests on staging, tag sales with:
-
-```text
-notes: 'Load test automated transaction'
-```
-
-Then run in Supabase SQL Editor:
+Tag sales with `notes: 'Load test automated transaction'`, then:
 
 ```bash
-# Session pooler — not transaction mode
 psql "$DIRECT_URL" -f scripts/teardown-load-test.sql
+# or
+npm run teardown:load-test:api
 ```
-
-Or: `npm run teardown:load-test:api`
 
 ## Database migration 009
 
-Before production load tests, apply FIFO hardening:
-
-```text
-supabase/migrations/009_production_hardening.sql
-```
-
-Paste in Supabase SQL Editor or run via `npm run migrate:via-cli` with `DIRECT_URL` (session mode).
+Before production load tests, apply FIFO hardening in `supabase/migrations/009_production_hardening.sql` via Supabase SQL Editor or `npm run migrate:via-cli`.

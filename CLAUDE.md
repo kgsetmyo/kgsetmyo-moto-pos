@@ -56,7 +56,7 @@ Browser (Joy UI) → Next.js API routes → Supabase Postgres
 - Joy UI (`@mui/joy/*`) for UI; `@base-ui/react` if needed — avoid deprecated `@mui/base`.
 - Cost prices are admin-only; enforce in API and UI.
 - Checkout must go through RPCs — never decrement stock in application code alone.
-- CI (`.github/workflows/test-audit.yml`) seeds test data before smoke tests.
+- CI (`.github/workflows/test-audit.yml`) — lint → audit → build → seed → smoke/security → teardown; pinned action SHAs; Dependabot weekly.
 
 ## Components
 
@@ -68,4 +68,5 @@ Browser (Joy UI) → Next.js API routes → Supabase Postgres
 - [README.md](./README.md)
 - [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)
 - [docs/CI.md](./docs/CI.md)
+- [docs/BRANCH_PROTECTION.md](./docs/BRANCH_PROTECTION.md)
 - [docs/HANDOVER.md](./docs/HANDOVER.md)

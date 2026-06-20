@@ -15,6 +15,7 @@
     "test:smoke": "node --env-file=.env.local scripts/smoke-test.mjs",
     "test:stress": "node --env-file=.env.local scripts/stress-test.mjs",
     "test:security": "node --env-file=.env.local scripts/security-audit.mjs",
+    "audit:ci": "npm audit --audit-level=high",
     "test:audit": "npm run lint && npx tsc --noEmit && npm run test:smoke && npm run test:security",
     "test:ci:teardown": "node --env-file=.env.local scripts/ci-teardown.mjs",
     "test:all": "npm run lint && npx tsc --noEmit && npm run build && node --env-file=.env.local scripts/smoke-test.mjs",
