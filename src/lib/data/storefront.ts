@@ -22,7 +22,7 @@ export interface StoreProductDetail extends StoreProduct {
 }
 
 const PUBLIC_PRODUCT_SELECT = `
-  id, sku, name, low_stock_threshold,
+  id, sku, name, low_stock_threshold, is_active,
   brand:brands(name),
   category:categories(name),
   inventory_batches(quantity_remaining, selling_price, received_at),
@@ -31,6 +31,91 @@ const PUBLIC_PRODUCT_SELECT = `
     bike_model:bike_models(name, bike_brand:bike_brands(name))
   )
 `;
+
+type InventoryBatchRow = {
+  quantity_remaining: number;
+  selling_price: number;
+  received_at: string;
+};
+
+function batchStockAndPrice(batches: InventoryBatchRow[]) {
+  const sorted = [...batches].sort((a, b) => a.received_at.localeCompare(b.received_at));
+  const totalQty = sorted.reduce((sum, batch) => sum + batch.quantity_remaining, 0);
+  const sellingPrice = sorted[0] ? Number(sorted[0].selling_price) : 0;
+  return { totalQty, sellingPrice };
+}
+
+export type StoreCheckoutLineInput = {
+  productId: string;
+  quantity: number;
+  unitPrice?: number;
+};
+
+export type StoreCheckoutLineResolved = {
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+};
+
+const PRICE_TOLERANCE = 0.01;
+
+/** Resolve authoritative FIFO display prices from DB; reject client tampering. */
+export async function resolveStoreCheckoutLines(
+  lines: StoreCheckoutLineInput[]
+): Promise<StoreCheckoutLineResolved[]> {
+  if (lines.length === 0) {
+    throw new Error("Order must have at least one line item");
+  }
+
+  const productIds = [...new Set(lines.map((line) => line.productId))];
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, sku, name, is_active, inventory_batches(quantity_remaining, selling_price, received_at)")
+    .in("id", productIds)
+    .eq("is_active", true);
+
+  if (error) throw error;
+
+  const byId = new Map(
+    (data ?? []).map((row) => [row.id as string, row as Record<string, unknown>])
+  );
+
+  const resolved: StoreCheckoutLineResolved[] = [];
+
+  for (const line of lines) {
+    const row = byId.get(line.productId);
+    if (!row) {
+      throw new Error(`Product not found: ${line.productId}`);
+    }
+
+    const batches = (row.inventory_batches as InventoryBatchRow[]) ?? [];
+    const { totalQty, sellingPrice } = batchStockAndPrice(batches);
+    const name = String(row.name ?? row.sku ?? line.productId);
+
+    if (totalQty < line.quantity) {
+      throw new Error(`Insufficient stock for ${name}`);
+    }
+    if (sellingPrice <= 0) {
+      throw new Error(`Product unavailable: ${name}`);
+    }
+
+    if (
+      line.unitPrice !== undefined &&
+      Math.abs(line.unitPrice - sellingPrice) > PRICE_TOLERANCE
+    ) {
+      throw new Error(`Price mismatch for ${name}`);
+    }
+
+    resolved.push({
+      productId: line.productId,
+      quantity: line.quantity,
+      unitPrice: sellingPrice,
+    });
+  }
+
+  return resolved;
+}
 
 function sanitizeSearchQuery(q: string) {
   const trimmed = q
@@ -48,14 +133,8 @@ function stockLabelFor(totalQty: number, threshold: number): StockLabel {
 }
 
 function mapStoreProduct(row: Record<string, unknown>): StoreProduct {
-  const batches = (row.inventory_batches as Array<{
-    quantity_remaining: number;
-    selling_price: number;
-    received_at: string;
-  }>) ?? [];
-  batches.sort((a, b) => a.received_at.localeCompare(b.received_at));
-  const totalQty = batches.reduce((s, b) => s + b.quantity_remaining, 0);
-  const oldest = batches[0];
+  const batches = (row.inventory_batches as InventoryBatchRow[]) ?? [];
+  const { totalQty, sellingPrice } = batchStockAndPrice(batches);
   const brand = row.brand as { name?: string } | null;
   const category = row.category as { name?: string } | null;
   const threshold = Number(row.low_stock_threshold ?? 5);
@@ -67,7 +146,7 @@ function mapStoreProduct(row: Record<string, unknown>): StoreProduct {
     name: row.name as string,
     brandName: brand?.name ?? "—",
     categoryName: category?.name ?? "—",
-    sellingPrice: oldest ? Number(oldest.selling_price) : 0,
+    sellingPrice,
     stockLabel: label,
     inStock: label !== "OUT",
   };

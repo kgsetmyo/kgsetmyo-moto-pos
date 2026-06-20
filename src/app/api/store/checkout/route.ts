@@ -13,26 +13,23 @@ export async function POST(request: NextRequest) {
     const customer = await requireCustomerAccount();
     const body = storeCheckoutSchema.parse(await request.json());
 
-    const subtotal = body.lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
-    const payments = body.payAtPickup
-      ? []
-      : [
-          {
-            method: "MOBILE_BANKING" as const,
-            amount: subtotal,
-            reference: body.paymentReference,
-          },
-        ];
-
     const order = await createWebOrderWithFifo({
       customerId: customer.id,
       lines: body.lines,
-      payments,
+      payAtPickup: body.payAtPickup,
+      paymentReference: body.paymentReference,
       notes: body.notes,
     });
 
     return NextResponse.json(order, { status: 201 });
   } catch (error) {
-    return apiError(error, { fallback: "Checkout failed" });
+    return apiError(error, {
+      fallback: "Checkout failed",
+      statusMap: {
+        "Product not found": 404,
+        "Price mismatch": 400,
+        "Product unavailable": 409,
+      },
+    });
   }
 }

@@ -6,7 +6,7 @@ export const storeCheckoutSchema = z.object({
       z.object({
         productId: z.string().uuid(),
         quantity: z.number().int().min(1).max(99),
-        unitPrice: z.number().positive(),
+        unitPrice: z.number().positive().optional(),
       })
     )
     .min(1),

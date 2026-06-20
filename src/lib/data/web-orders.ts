@@ -1,36 +1,53 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveStoreCheckoutLines } from "@/lib/data/storefront";
 import type { PaymentMethod } from "@/types";
 
 export interface WebOrderLineInput {
   productId: string;
   quantity: number;
-  unitPrice: number;
+  unitPrice?: number;
 }
 
 export interface CreateWebOrderInput {
   customerId: string;
   lines: WebOrderLineInput[];
-  payments: Array<{
+  payments?: Array<{
     method: PaymentMethod;
     amount: number;
     slipUrl?: string;
     reference?: string;
   }>;
+  payAtPickup?: boolean;
+  paymentReference?: string;
   discount?: number;
   notes?: string;
 }
 
 export async function createWebOrderWithFifo(input: CreateWebOrderInput) {
   const supabase = createAdminClient();
+  const lines = await resolveStoreCheckoutLines(input.lines);
+  const subtotal = lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+
+  const payments =
+    input.payments ??
+    (input.payAtPickup
+      ? []
+      : [
+          {
+            method: "MOBILE_BANKING" as const,
+            amount: subtotal,
+            reference: input.paymentReference,
+          },
+        ]);
 
   const { data, error } = await supabase.rpc("create_web_order_with_fifo", {
     p_customer_id: input.customerId,
-    p_lines: input.lines.map((l) => ({
+    p_lines: lines.map((l) => ({
       productId: l.productId,
       quantity: l.quantity,
       unitPrice: l.unitPrice,
     })),
-    p_payments: input.payments.map((p) => ({
+    p_payments: payments.map((p) => ({
       method: p.method,
       amount: p.amount,
       slipUrl: p.slipUrl ?? null,

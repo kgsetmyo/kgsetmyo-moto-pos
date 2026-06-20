@@ -20,6 +20,7 @@ export function apiError(
         : options?.fallback ?? "Request failed";
   const status =
     options?.statusMap?.[message] ??
+    Object.entries(options?.statusMap ?? {}).find(([key]) => message.includes(key))?.[1] ??
     (message === "Unauthorized"
       ? 401
       : message === "Forbidden"
