@@ -103,15 +103,15 @@ Update Supabase redirect URLs to match.
 
 ## Troubleshooting
 
-| Issue                 | Fix                                                                 |
-| --------------------- | ------------------------------------------------------------------- |
-| Login fails on Vercel | Add production URL to Supabase redirect URLs; set `ADMIN_EMAIL`     |
-| Checkout 503          | Run `003_create_sale_rpc.sql` in Supabase                           |
-| Credit sales fail     | Run `008_payment_method_credit.sql` or full `optional_bundle.sql`   |
-| Void slow / errors    | Run `007_void_sale_rpc.sql`                                         |
-| API 500 on dashboard  | Check `SUPABASE_SERVICE_ROLE_KEY` is set in Vercel                  |
-| Build fails           | Run `npm run build` locally first to catch TypeScript errors       |
-| CI smoke tests fail   | Verify all 8 GitHub secrets are set; check staging auth users exist |
+| Issue                  | Fix                                                                  |
+| ---------------------- | -------------------------------------------------------------------- |
+| Login fails on Vercel  | Add production URL to Supabase redirect URLs; set `ADMIN_EMAIL`      |
+| Checkout 503           | Run `003_create_sale_rpc.sql` in Supabase                            |
+| Credit sales fail      | Run `008_payment_method_credit.sql` or full `optional_bundle.sql`    |
+| Void slow / errors     | Run `007_void_sale_rpc.sql`                                          |
+| API 500 on dashboard   | Check `SUPABASE_SERVICE_ROLE_KEY` is set in Vercel                   |
+| Build fails            | Run `npm run build` locally first to catch TypeScript errors         |
+| CI smoke tests fail    | Verify all 8 GitHub secrets are set; check staging auth users exist  |
 
 ## Redeploy after changes
 

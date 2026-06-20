@@ -89,10 +89,10 @@ Auth is enforced in `src/proxy.ts` (Next.js 16 proxy convention) and API route g
 | `npm run lint`           | ESLint                                                |
 | `npm run test:audit`     | Lint + typecheck + smoke + security (server required) |
 | `npm run test:all`       | Lint + typecheck + build + smoke                      |
-| `npm run migrate:check`  | Verify RPCs installed                                   |
+| `npm run migrate:check`  | Verify RPCs installed                                 |
 | `npm run migrate:010`    | Apply analytics migration via script                  |
 | `npm run migrate:011`    | Apply omnichannel migration via script                |
-| `npm run auth:check`     | List Supabase auth users                                |
+| `npm run auth:check`     | List Supabase auth users                              |
 | `npm run seed`           | Seed sample product                                   |
 | `npm run admin:create`   | Create admin user                                     |
 | `npm run cashier:create` | Create cashier user                                   |
