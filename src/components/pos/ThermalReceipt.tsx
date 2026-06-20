@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef } from "react";
-import Box from "@mui/joy/Box";
 import Button from "@mui/joy/Button";
 import Stack from "@mui/joy/Stack";
 import useSWR from "swr";
@@ -20,9 +19,7 @@ export function ThermalReceipt({ sale }: ThermalReceiptProps) {
 
   return (
     <Stack spacing={1}>
-      <Box ref={printRef}>
-        <ThermalReceiptPrintArea sale={sale} settings={settings} />
-      </Box>
+      <ThermalReceiptPrintArea ref={printRef} sale={sale} settings={settings} />
       <Button size="sm" variant="outlined" onClick={() => handlePrint()}>
         Print 80mm Receipt
       </Button>
