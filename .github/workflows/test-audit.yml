@@ -10,13 +10,6 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     env:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-      CASHIER_EMAIL: ${{ secrets.CASHIER_EMAIL }}
-      CASHIER_PASSWORD: ${{ secrets.CASHIER_PASSWORD }}
       TEST_BASE_URL: http://localhost:3000
       SMOKE_INSECURE_TLS: "1"
 
@@ -29,6 +22,28 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - name: Create .env.local from secrets
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          CASHIER_EMAIL: ${{ secrets.CASHIER_EMAIL }}
+          CASHIER_PASSWORD: ${{ secrets.CASHIER_PASSWORD }}
+        run: |
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY"
+            echo "ADMIN_EMAIL=$ADMIN_EMAIL"
+            echo "ADMIN_PASSWORD=$ADMIN_PASSWORD"
+            echo "CASHIER_EMAIL=$CASHIER_EMAIL"
+            echo "CASHIER_PASSWORD=$CASHIER_PASSWORD"
+            echo "TEST_BASE_URL=http://localhost:3000"
+            echo "SMOKE_INSECURE_TLS=1"
+          } > .env.local
 
       - name: Lint and typecheck
         run: npm run lint && npx tsc --noEmit
